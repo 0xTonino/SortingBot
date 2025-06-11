@@ -96,11 +96,12 @@ class ManualSorterBot {
    * Check if directory name suggests it's a target sorting directory
    */
   isTargetDirectory(dirName) {
-    // Skip directories that look like brand folders (contain letters and possibly numbers/spaces)
-    // but avoid skipping legitimate source directories
+    // Skip directories that look like brand folders or model folders
+    // Brand folders are typically single words or short names
     const looksLikeBrandDir = /^[A-Za-z][A-Za-z0-9\s\-_]*$/.test(dirName) && 
-                             dirName.length > 2 && 
-                             dirName.length < 30;
+                             dirName.length > 1 && 
+                             dirName.length < 20 &&
+                             !dirName.includes('.');
     return looksLikeBrandDir;
   }
 
@@ -141,10 +142,10 @@ class ManualSorterBot {
       
       // Move files if not in dry run mode
       if (this.dryRun) {
-        console.log(`   🧪 [DRY RUN] Would move to: ${path.relative(this.targetDirectory, targetFolderPath)}`);
+        console.log(`   🧪 [DRY RUN] Would move to: ${path.relative(this.targetDirectory, targetFolderPath)}/`);
       } else {
         await this.moveFiles(pdfPath, jsonPath, targetFolderPath);
-        console.log(`   ✅ Moved to: ${path.relative(this.targetDirectory, targetFolderPath)}`);
+        console.log(`   ✅ Moved to: ${path.relative(this.targetDirectory, targetFolderPath)}/`);
         this.stats.moved++;
       }
       
@@ -155,33 +156,20 @@ class ManualSorterBot {
   }
 
   /**
-   * Create target path based on metadata
+   * Create target path based on metadata - hierarchical structure: brand/model/
    */
   createTargetPath(brand, model, metadata) {
-    let folderName = brand;
+    if (!brand) {
+      throw new Error('Brand is required for creating target path');
+    }
     
+    // Create hierarchical path: brand/model/
     if (model) {
-      folderName += `_${model}`;
+      return path.join(this.targetDirectory, brand, model);
+    } else {
+      // If no model, just use brand folder
+      return path.join(this.targetDirectory, brand);
     }
-    
-    // Add year information if available
-    if (metadata.yearRange) {
-      folderName += `_${metadata.yearRange}`;
-    } else if (metadata.year) {
-      folderName += `_${metadata.year}`;
-    }
-    
-    // Add manual type if available and specific
-    if (metadata.manualType && 
-        metadata.manualType !== 'other' && 
-        metadata.manualType.length < 20) {
-      const sanitizedType = this.sanitizeFolderName(metadata.manualType);
-      if (sanitizedType) {
-        folderName += `_${sanitizedType}`;
-      }
-    }
-    
-    return path.join(this.targetDirectory, folderName);
   }
 
   /**
@@ -300,9 +288,10 @@ Examples:
   node manual-sorter-bot.js ./input-folder ./output-folder
 
 The bot will organize manuals into folders like:
-  Honda_CBR600RR_2003-2006_workshop_manual/
-  Yamaha_YZF-R1_2009_owner_manual/
-  Kawasaki_Ninja_250_parts_catalog/
+  Honda/CBR600RR/
+  Yamaha/YZF-R1/
+  Kawasaki/Ninja_250/
+  Kawasaki/Z650/
 `);
 }
 
